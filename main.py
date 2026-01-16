@@ -6,11 +6,13 @@ sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
 from src.ui.main_window import MainWindow, QApplication
 
+
 def main():
     app = QApplication(sys.argv)
-    
+
     # Global Dark Theme Styling
-    app.setStyleSheet("""
+    app.setStyleSheet(
+        """
         QMainWindow, QWidget {
             background-color: #1e1e1e;
             color: #e0e0e0;
@@ -43,11 +45,13 @@ def main():
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
             height: 0px;
         }
-    """)
-    
+    """
+    )
+
     window = MainWindow()
     window.show()
     sys.exit(app.exec())
+
 
 if __name__ == "__main__":
     main()
