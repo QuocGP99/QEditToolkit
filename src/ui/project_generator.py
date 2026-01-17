@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
     QGroupBox,
 )
 from PyQt6.QtGui import QFont
+from PyQt6.QtCore import pyqtSignal
 
 # ============================================================================
 # PROJECT TEMPLATES CONFIGURATION
@@ -73,6 +74,9 @@ PROJECT_TEMPLATES = {
 
 
 class ProjectGeneratorDialog(QDialog):
+    # Signal to notify when project is created
+    project_created = pyqtSignal(str)  # Emit folder path
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Dynamic Project Generator")
@@ -355,6 +359,9 @@ class ProjectGeneratorDialog(QDialog):
             QMessageBox.information(
                 self, "Success", f"Project created successfully!\n\n📁 {root_folder}"
             )
+
+            # Emit signal for project creation handling
+            self.project_created.emit(root_folder)
 
             # Reset form
             self.reset_form()

@@ -34,40 +34,59 @@ QEditToolkit được phát triển để giải quyết bài toán quản lý t
 ## ✨ Tính Năng Chính
 
 ### 1. **DVR Asset Manager**
-   - Nhập file từ máy tính vào thư viện
-   - Tìm kiếm asset theo tên
-   - Phân loại asset theo thư mục
-   - Đánh dấu yêu thích (⭐ Favorites)
-   - Xem preview hình ảnh/video
-   - Xoá asset và quản lý thư mục
+
+- Nhập file từ máy tính vào thư viện
+- Tìm kiếm asset theo tên
+- Phân loại asset theo thư mục
+- Đánh dấu yêu thích (⭐ Favorites)
+- Xem preview hình ảnh/video
+- Xoá asset và quản lý thư mục
 
 ### 2. **Dynamic Project Generator** 🆕
-   - **4 Mẫu Dự Án:**
-     - 🎬 **Vlog** - Cho video YouTube
-     - 📱 **Shorts/Reels** - Cho TikTok & Instagram
-     - 💍 **Wedding** - Cho video cưới
-     - 🎉 **Event** - Cho sự kiện
-   - Tạo tên dự án tự động: `YYYYMMDD_PREFIX_ProjectName`
-   - Tự động tạo cấu trúc thư mục
-   - Tạo file README.txt với thông tin dự án
-   - Live preview đường dẫn dự án
 
-### 3. **Database Management**
-   - SQLite database để lưu metadata asset
-   - Quản lý category tự động
-   - Hỗ trợ search toàn văn
+- **4 Mẫu Dự Án:**
+  - 🎬 **Vlog** - Cho video YouTube
+  - 📱 **Shorts/Reels** - Cho TikTok & Instagram
+  - 💍 **Wedding** - Cho video cưới
+  - 🎉 **Event** - Cho sự kiện
+- Tạo tên dự án tự động: `YYYYMMDD_PREFIX_ProjectName`
+- Tự động tạo cấu trúc thư mục
+- Tạo file README.txt với thông tin dự án
+- Live preview đường dẫn dự án
+
+### 3. **Deep Link DaVinci Resolve** 🎬 (NEW)
+
+- **Sync Folder Structure to Bins:**
+  - Quét cấu trúc thư mục dự án
+  - Tự động tạo Bins trong DaVinci Resolve
+  - Import media files vào đúng vị trí
+  - Tiết kiệm thời gian setup
+
+- **Quick Import to Timeline:**
+  - Double-click file để gửi vào Timeline
+  - Right-click → "Send to Timeline"
+  - File tự bay vào vị trí con trỏ hiện tại
+  - Hỗ trợ video, audio, ảnh
+
+### 4. **Database Management**
+
+- SQLite database để lưu metadata asset
+- Quản lý category tự động
+- Hỗ trợ search toàn văn
 
 ---
 
 ## 🖥️ Yêu Cầu Hệ Thống
 
 ### Phần Cứng
+
 - CPU: Intel i5 / AMD Ryzen 5 (hoặc tương đương)
 - RAM: 8GB trở lên
 - Ổ cứng: 100GB không gian trống cho asset
 - Màn hình: 1024x768 trở lên (khuyến nghị 1920x1080)
 
 ### Phần Mềm
+
 - **Python**: 3.9 hoặc cao hơn
 - **OS**: Windows 10+, macOS 10.14+, Ubuntu 18.04+
 - **PyQt6**: Tự cài đặt qua dependencies
@@ -77,12 +96,14 @@ QEditToolkit được phát triển để giải quyết bài toán quản lý t
 ## 📦 Cài Đặt
 
 ### 1. Clone Repository
+
 ```bash
 git clone https://github.com/QuocGP99/QEditToolkit.git
 cd QEditToolkit
 ```
 
 ### 2. Tạo Virtual Environment
+
 ```bash
 # Windows
 python -m venv .venv
@@ -94,11 +115,13 @@ source .venv/bin/activate
 ```
 
 ### 3. Cài Đặt Dependencies
+
 ```bash
 pip install -r requirements.txt
 ```
 
 ### 4. Chạy Ứng Dụng
+
 ```bash
 python main.py
 ```
@@ -110,30 +133,36 @@ python main.py
 ### Quản Lý Asset
 
 #### **Nhập Asset**
+
 1. Nhấp nút **"Import Asset"** ở thanh công cụ trên
 2. Chọn file muốn thêm (hỗ trợ video, hình ảnh, âm thanh, file DaVinci)
 3. Chọn thư mục đích hoặc để trống để lưu vào gốc
 4. Asset sẽ được sao chép vào thư mục `storage/`
 
 #### **Tìm Kiếm Asset**
+
 - Gõ tên asset vào ô "Search assets..." để tìm kiếm real-time
 - Kết quả sẽ cập nhật tự động
 
 #### **Phân Loại**
+
 - Nhấp vào thư mục ở panel **FOLDERS** bên trái để xem asset theo category
 - Nhấp **"All Assets"** để xem tất cả
 
 #### **Yêu Thích**
+
 - Nhấp nút ⭐ trên asset để đánh dấu
 - Xem danh sách yêu thích qua nút **"⭐ Favorites"**
 
 #### **Xoá Asset**
+
 - Right-click thư mục → **"Delete Folder"**
 - Xác nhận, asset và thư mục sẽ bị xoá vĩnh viễn
 
 ### Tạo Dự Án Mới
 
 #### **Sử Dụng Project Generator**
+
 1. Nhấp nút **"📁 New Project"** trên sidebar
 2. **Chọn Template:**
    - 🎬 Vlog - YouTube videos
@@ -156,11 +185,49 @@ python main.py
      - Tạo cấu trúc thư mục tự động
      - Tạo file README.txt
 
+### Sync Folder to DaVinci Resolve
+
+#### **Tự động tạo Bins từ Folder Structure**
+
+1. Nhấp nút **"🎬 Sync to Resolve"** trên sidebar
+2. Chọn folder chứa dự án
+3. Nhấp **"Start Sync"**
+4. Ứng dụng sẽ:
+   - Kết nối tới DaVinci Resolve
+   - Quét cấu trúc thư mục
+   - Tạo Bins y hệt trong Resolve
+   - Import media files vào bin tương ứng
+
+**Yêu cầu:** DaVinci Resolve phải đang chạy
+
+### Quick Import to Timeline
+
+#### **Gửi Media từ QEditToolkit vào Timeline**
+
+**Phương pháp 1: Double-Click**
+
+- Tìm file audio/video muốn import
+- Double-click vào file
+- File tự động thêm vào timeline hiện tại
+
+**Phương pháp 2: Right-Click Menu**
+
+- Right-click vào file
+- Chọn **"🎬 Send to Timeline"**
+- File được import vào vị trí con trỏ
+
+**Hỗ trợ các định dạng:**
+
+- Video: MP4, MOV, AVI, MXF, M2TS
+- Audio: WAV, MP3, AAC, FLAC
+- Hình ảnh: PNG, JPG, TIFF, DPX
+
 ---
 
 ## 📂 Cấu Trúc Dự Án
 
 ### Project Vlog
+
 ```
 20240117_VLOG_DaLatTrip/
 ├── 00_ProjectFiles/       # File project (Premiere, Final Cut Pro)
@@ -175,6 +242,7 @@ python main.py
 ```
 
 ### Project Shorts/Reels
+
 ```
 20240117_REEL_BeautyTips/
 ├── 00_ProjectFiles/
@@ -187,6 +255,7 @@ python main.py
 ```
 
 ### Project Wedding
+
 ```
 20240117_WED_JohnJane/
 ├── 00_ProjectFiles/
@@ -201,6 +270,7 @@ python main.py
 ```
 
 ### Project Event
+
 ```
 20240117_EVENT_TechConf2024/
 ├── 00_ProjectFiles/
@@ -226,7 +296,8 @@ QEditToolkit/
 │   ├── core/
 │   │   ├── file_manager.py       # Quản lý import file
 │   │   ├── preview_generator.py  # Tạo preview thumbnail
-│   │   └── resolve_installer.py  # DaVinci Resolve support
+│   │   ├── resolve_installer.py  # DaVinci Resolve templates
+│   │   └── resolve_api.py        # Deep link Resolve API
 │   │
 │   ├── database/
 │   │   └── db_manager.py         # SQLite database management
@@ -235,7 +306,8 @@ QEditToolkit/
 │       ├── main_window.py        # Main application window
 │       ├── asset_grid.py         # Asset grid view
 │       ├── preview_panel.py      # Preview panel
-│       └── project_generator.py  # Dynamic Project Generator
+│       ├── project_generator.py  # Dynamic Project Generator
+│       └── resolve_sync_dialog.py # Resolve Sync Dialog
 │
 ├── storage/               # Thư mục lưu asset
 │   └── SFXs/             # Thư mục SFX mặc định
@@ -248,6 +320,7 @@ QEditToolkit/
 ```
 
 ### Công Nghệ Sử Dụng
+
 - **GUI Framework**: PyQt6
 - **Database**: SQLite3
 - **File Management**: Python os/shutil
@@ -259,6 +332,7 @@ QEditToolkit/
 ## 🔧 Troubleshooting
 
 ### Vấn đề: Ứng dụng không chạy
+
 ```bash
 # Kiểm tra Python version
 python --version  # Cần 3.9+
@@ -268,11 +342,13 @@ pip install -r requirements.txt --force-reinstall
 ```
 
 ### Vấn đề: Import asset thất bại
+
 - Kiểm tra quyền ghi thư mục `storage/`
 - Đảm bảo file không bị lock bởi chương trình khác
 - Thử chạy ứng dụng với quyền admin
 
 ### Vấn đề: Database lỗi
+
 ```bash
 # Xoá database cũ và tạo mới
 rm storage/database.db
@@ -280,6 +356,7 @@ python main.py
 ```
 
 ### Vấn đề: Giao diện không hiển thị đúng
+
 - Kiểm tra phiên bản PyQt6: `pip show PyQt6`
 - Cập nhật: `pip install PyQt6 --upgrade`
 

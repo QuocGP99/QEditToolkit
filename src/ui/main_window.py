@@ -547,4 +547,10 @@ class MainWindow(QMainWindow):
     def open_project_generator(self):
         """Open the Dynamic Project Generator dialog"""
         dialog = ProjectGeneratorDialog(self)
+        dialog.project_created.connect(self.on_project_created)
         dialog.exec()
+
+    def on_project_created(self, folder_path):
+        """Handle project creation"""
+        # Project folder created successfully
+        pass
