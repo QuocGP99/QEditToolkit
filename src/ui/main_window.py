@@ -17,8 +17,12 @@ from PyQt6.QtWidgets import (
     QTreeWidgetItem,
     QMessageBox,
     QSplitter,
+    QSplitter,
     QMenu,
+    QDialog,
+    QComboBox,
 )
+
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QShortcut, QKeySequence, QIcon, QAction
 
@@ -28,6 +32,11 @@ try:
     from src.core.file_manager import FileManager
     from src.ui.preview_panel import PreviewPanel
     from src.ui.project_generator import ProjectGeneratorDialog
+    from src.core.resolve_api import ResolveAPI
+    from src.core.clipboard_manager import ClipboardManager
+    from src.ui.smart_paste_dialog import SmartPasteDialog
+    from src.ui.clipboard_history_panel import ClipboardHistoryPanel
+
 except ImportError:
     # Handle running directly for testing
     import sys
@@ -39,22 +48,57 @@ except ImportError:
     from src.core.file_manager import FileManager
     from src.ui.preview_panel import PreviewPanel
     from src.ui.project_generator import ProjectGeneratorDialog
+    from src.core.resolve_api import ResolveAPI
+    from src.core.clipboard_manager import ClipboardManager
+    from src.ui.smart_paste_dialog import SmartPasteDialog
+
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, storage_path=None):
         super().__init__()
         self.setWindowTitle("DVR Asset Manager")
         self.resize(1200, 800)
+        
+        # Storage Path
+        self.storage_path = storage_path
+        if not self.storage_path:
+            # Fallback (should be handled by main.py but for safety)
+            self.storage_path = os.path.abspath("storage")
+        
+        if not os.path.exists(self.storage_path):
+            os.makedirs(self.storage_path, exist_ok=True)
+        
+        # Global Stylesheet
+        self.setStyleSheet("""
+            QWidget {
+                font-family: "SF Pro Text", "Segoe UI", sans-serif;
+                font-size: 10pt;
+            }
+            QToolTip {
+                background-color: #333;
+                color: white;
+                border: 1px solid #444;
+                padding: 4px;
+            }
+        """)
 
         # Initialize Core Systems
         self.db = DBManager()
-        self.file_manager = FileManager(self.db)
+        self.file_manager = FileManager(self.db, storage_dir=self.storage_path)
+        self.resolve_api = ResolveAPI()
+        self.clipboard_manager = ClipboardManager(db_manager=self.db)
+        
+        # Track current folder for imports
+        self.current_category = None
 
         # Setup UI
         self.setup_ui()
+        self.setup_ui()
+        self.sync_database_with_storage() # Auto-sync on startup
         self.load_assets()
         self._populate_categories()
+        self.update_favorites_count()
 
     def setup_ui(self):
         # Main Layout
@@ -108,11 +152,19 @@ class MainWindow(QMainWindow):
         self.sidebar_layout.addWidget(all_btn)
 
         # Favorites button
-        fav_btn = QPushButton("⭐ Favorites")
-        fav_btn.setProperty("filter_type", "favorites")
-        fav_btn.clicked.connect(lambda: self.filter_by_favorites())
-        self._style_sidebar_button(fav_btn)
-        self.sidebar_layout.addWidget(fav_btn)
+        self.fav_btn = QPushButton("⭐ Favorites")
+        self.fav_btn.setProperty("filter_type", "favorites")
+        self.fav_btn.clicked.connect(lambda: self.filter_by_favorites())
+        self._style_sidebar_button(self.fav_btn)
+        self.sidebar_layout.addWidget(self.fav_btn)
+        # Identify for easy lookup (e.g. finding by FindChild if needed elsewhere, though self.fav_btn is enough)
+        self.fav_btn.setObjectName("Favorites")
+
+        # Clipboard History Sidebar Button
+        hist_btn = QPushButton("📋 Clipboard History")
+        hist_btn.clicked.connect(self.toggle_clipboard_history)
+        self._style_sidebar_button(hist_btn)
+        self.sidebar_layout.addWidget(hist_btn)
 
         # Categories section header
         cat_label = QLabel("FOLDERS")
@@ -231,6 +283,26 @@ class MainWindow(QMainWindow):
         toggle_btn.clicked.connect(self.toggle_sidebar)
         top_layout.addWidget(toggle_btn)
 
+        # View Mode Selector
+        self.view_mode_combo = QComboBox()
+        self.view_mode_combo.addItems(["Icon View", "List View", "Large Icons"])
+        self.view_mode_combo.setFixedWidth(120)
+        self.view_mode_combo.setStyleSheet("""
+            QComboBox {
+                background-color: #2b2b2b;
+                border: 1px solid #333;
+                border-radius: 4px;
+                padding: 4px;
+                color: #eee;
+            }
+            QComboBox::drop-down { border: none; }
+        """)
+        self.view_mode_combo.currentIndexChanged.connect(self.change_view_mode)
+        top_layout.addWidget(self.view_mode_combo)
+        
+        # Spacer
+        top_layout.addSpacing(10)
+
         self.search_in = QLineEdit()
         self.search_in.setPlaceholderText("Search assets...")
         self.search_in.setStyleSheet(
@@ -250,11 +322,50 @@ class MainWindow(QMainWindow):
         self.search_in.textChanged.connect(self.load_assets)
         top_layout.addWidget(self.search_in)
 
-        import_btn = QPushButton("Import Asset")
+        import_btn = QPushButton("Import Asset ▼")
         import_btn.setStyleSheet(
-            "background-color: #007acc; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold;"
+            """
+            QPushButton {
+                background-color: #007acc; 
+                color: white; 
+                border: none; 
+                padding: 6px 12px; 
+                border-radius: 4px; 
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #0062a3;
+            }
+            QPushButton::menu-indicator {
+                image: none;
+            }
+            """
         )
-        import_btn.clicked.connect(self.import_assets)
+        # Create Menu
+        import_menu = QMenu(import_btn)
+        import_menu.setStyleSheet("""
+            QMenu {
+                background-color: #252525;
+                color: #ddd;
+                border: 1px solid #444;
+            }
+            QMenu::item {
+                padding: 5px 20px;
+            }
+            QMenu::item:selected {
+                background-color: #007acc;
+            }
+        """)
+        
+        action_files = QAction("Import Files...", self)
+        action_files.triggered.connect(self.import_assets)
+        import_menu.addAction(action_files)
+        
+        action_folder = QAction("Import Folder...", self)
+        action_folder.triggered.connect(self.import_folder_action)
+        import_menu.addAction(action_folder)
+        
+        import_btn.setMenu(import_menu)
         top_layout.addWidget(import_btn)
 
         content_layout.addWidget(top_bar)
@@ -266,33 +377,67 @@ class MainWindow(QMainWindow):
         )
 
         # Splitter for Grid and Preview
-        splitter = QSplitter(Qt.Orientation.Horizontal)
-        splitter.setStyleSheet("QSplitter::handle { background-color: #333; }")
-
+        self.splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.splitter.setStyleSheet("QSplitter::handle { background-color: #333; }")
+        
         # Asset Grid
         self.grid = AssetGrid(self)
-        splitter.addWidget(self.grid)
+        self.splitter.addWidget(self.grid)
 
-        # Preview Panel
+        # Preview Panel (Info Panel)
         self.preview_panel = PreviewPanel()
-        splitter.addWidget(self.preview_panel)
+        self.preview_panel.favorite_toggled.connect(self.on_favorite_toggled)
+        self.splitter.addWidget(self.preview_panel)
+        self.preview_panel.hide() # Default hidden
+        
+        # Clipboard History Panel (Initially Hidden)
+        self.clipboard_panel = ClipboardHistoryPanel(self.clipboard_manager)
+        self.clipboard_panel.hide()
+        self.splitter.addWidget(self.clipboard_panel)
 
         # Set splitter sizes (Grid gets more space)
-        splitter.setSizes([800, 400])
+        # Initial: [Grid, Preview Hidden, Clipboard Hidden]
+        self.splitter.setSizes([1200, 0, 0])
 
-        content_layout.addWidget(splitter)
+        # Add stretch to splitter to ensure it fills available space
+        content_layout.addWidget(self.splitter, 1)
         content_layout.addWidget(self.status_label)
 
         # Add sidebar and content to main layout
         main_layout.addWidget(self.sidebar_container)
-        main_layout.addWidget(content_widget)
+        main_layout.addWidget(content_widget, 1) # content_widget gets all extra space
 
         # Shortcuts
         self.select_all_shortcut = QShortcut(QKeySequence("Ctrl+A"), self)
         self.select_all_shortcut.activated.connect(self.grid.selectAll)
 
         # Connect grid selection to preview
-        self.grid.itemClicked.connect(self.on_asset_clicked)
+        # Use itemSelectionChanged to handle both selection and deselection (clicking empty space)
+        self.grid.itemSelectionChanged.connect(self.on_selection_changed)
+        
+        # Listen for favorite changes from Grid (Context Menu)
+        self.grid.favorite_changed.connect(lambda _: self.update_favorites_count())
+        # Listen for deletions
+        self.grid.item_deleted.connect(lambda: self.update_favorites_count())
+
+    def on_selection_changed(self):
+        items = self.grid.selectedItems()
+        if not items:
+            self.preview_panel.hide()
+            # Collapse splitter section 1 (Preview) to 0
+            sizes = self.splitter.sizes()
+            if len(sizes) >= 2:
+                # Keep clipboard part if exists, clean preview part
+                # [Grid, Preview, Clipboard]
+                new_sizes = list(sizes)
+                new_sizes[1] = 0 
+                # Give space back to Grid
+                new_sizes[0] += sizes[1]
+                self.splitter.setSizes(new_sizes)
+            return
+
+        # If has selection, update
+        self.on_asset_clicked(items[0])
 
     def _get_icon_btn_style(self):
         return """
@@ -332,7 +477,56 @@ class MainWindow(QMainWindow):
         asset_id = item.data(Qt.ItemDataRole.UserRole + 1)
         asset_data = self.db.get_asset_by_id(asset_id)
         if asset_data:
+            if not self.preview_panel.isVisible():
+                self.preview_panel.show()
+                # Adjust splitter size
+                sizes = self.splitter.sizes()
+                if len(sizes) == 3: 
+                     clip_width = sizes[2]
+                     avail = sizes[0] + sizes[1]
+                     # Info panel needs less space (e.g. 250px)
+                     self.splitter.setSizes([avail - 250, 250, clip_width])
+                else:
+                     self.splitter.setSizes([800, 250])
+
             self.preview_panel.update_preview(asset_data)
+        
+    def on_favorite_toggled(self, asset_id):
+        new_state = self.db.toggle_favorite(asset_id)
+        # Update UI in Grid
+        # Find item in grid
+        for index in range(self.grid.count()):
+            item = self.grid.item(index)
+            if item.data(Qt.ItemDataRole.UserRole + 1) == asset_id:
+                # Update item display
+                name = item.text()
+                if new_state:
+                    if not name.startswith("⭐ "):
+                        item.setText("⭐ " + name)
+                else:
+                    if name.startswith("⭐ "):
+                        item.setText(name.replace("⭐ ", ""))
+                
+                item.setData(Qt.ItemDataRole.UserRole + 2, new_state)
+                break
+        
+        # If in Favorites view, refresh
+        fav_btn = self.sidebar_container.findChild(QPushButton, "Favorites")
+        if fav_btn and fav_btn.isChecked():
+                self.filter_by_favorites()
+        
+        # Update Favorites count
+        self.update_favorites_count()
+
+    def update_favorites_count(self):
+        """Update the Favorites button label with current count."""
+        try:
+             # Count manually or add a DB method. 
+             favorites = [a for a in self.db.get_all_assets() if a.get("is_favorite")]
+             count = len(favorites)
+             self.fav_btn.setText(f"⭐ Favorites ({count})")
+        except Exception as e:
+             print(f"Error updating fav count: {e}")
 
     def toggle_sidebar(self):
         visible = self.sidebar_container.isVisible()
@@ -342,6 +536,11 @@ class MainWindow(QMainWindow):
         self._populate_categories()
         self.load_assets(self.search_in.text())
 
+    def change_view_mode(self, index):
+        modes = ["icon", "list", "large"]
+        if 0 <= index < len(modes):
+            self.grid.set_view_mode(modes[index])
+
     def _populate_categories(self):
         # Clear existing
         self.folder_tree.clear()
@@ -350,18 +549,26 @@ class MainWindow(QMainWindow):
         db_categories = set(self.db.get_all_categories())
 
         # Also scan physical storage for empty folders
-        storage_path = os.path.abspath("storage")
+        storage_path = self.storage_path
         physical_categories = set()
         if os.path.exists(storage_path):
             for root, dirs, files in os.walk(storage_path):
                 rel_path = os.path.relpath(root, storage_path)
                 if rel_path == ".":
                     continue
+                # Exclude clipboard_history from the main folder tree
+                if "clipboard_history" in rel_path:
+                    continue
+                    
                 rel_path = rel_path.replace("\\", "/")
                 physical_categories.add(rel_path)
 
         # Merge both sources
         categories = sorted(list(db_categories.union(physical_categories)))
+        # Filter out clipboard_history if it came from DB
+        categories = [c for c in categories if "clipboard_history" not in c]
+
+        # Get DB counts
 
         # Get DB counts
         counts = self.db.get_category_counts()
@@ -447,7 +654,7 @@ class MainWindow(QMainWindow):
                         pass
 
             # 2. Delete physical folder
-            storage_path = os.path.abspath("storage")
+            storage_path = self.storage_path
             full_dir_path = os.path.join(storage_path, folder_path)
             if os.path.exists(full_dir_path):
                 try:
@@ -462,6 +669,7 @@ class MainWindow(QMainWindow):
             self.reload_library()
 
     def filter_by_category(self, category_name):
+        self.current_category = category_name # Track selection
         self.grid.clear()
         if category_name:
             # Filter by prefix match (so clicking parent folder shows all children)
@@ -472,6 +680,10 @@ class MainWindow(QMainWindow):
             ]
         else:
             assets = self.db.get_all_assets()
+        
+        # Sort assets by name
+        assets.sort(key=lambda x: x.get("file_name", "").lower())
+
         for asset in assets:
             self.grid.add_asset_item(asset)
         self.status_label.setText(f"{len(assets)} assets loaded.")
@@ -489,7 +701,7 @@ class MainWindow(QMainWindow):
         folder_name, ok = QInputDialog.getText(self, "New Folder", "Folder Name:")
         if ok and folder_name:
             # Create in storage directory
-            storage_path = os.path.abspath("storage")
+            storage_path = self.storage_path
             new_path = os.path.join(storage_path, folder_name)
 
             try:
@@ -509,6 +721,10 @@ class MainWindow(QMainWindow):
             assets = self.db.search_assets(query)
         else:
             assets = self.db.get_all_assets()
+            
+        # Sort assets by name
+        assets.sort(key=lambda x: x.get("file_name", "").lower())
+
         for asset in assets:
             self.grid.add_asset_item(asset)
         self.status_label.setText(f"{len(assets)} assets loaded.")
@@ -521,16 +737,90 @@ class MainWindow(QMainWindow):
             "All Files (*.*);;Videos (*.mp4 *.mov *.avi);;Images (*.png *.jpg);;DaVinci Files (*.drfx *.setting *.cube)",
         )
         if files:
+            # Show progress for bulk file import
+            from PyQt6.QtWidgets import QProgressDialog
+            progress = QProgressDialog("Importing files...", "Cancel", 0, len(files), self)
+            progress.setWindowModality(Qt.WindowModality.WindowModal)
+            progress.show()
+            
             count = 0
-            for file_path in files:
-                if self.file_manager.import_file(file_path):
+            for i, file_path in enumerate(files):
+                if progress.wasCanceled():
+                    break
+                
+                if self.file_manager.import_file(file_path, category_path=self.current_category):
                     count += 1
+                progress.setValue(i + 1)
 
             self.load_assets()
             self._populate_categories()
             QMessageBox.information(
                 self, "Import Complete", f"Successfully imported {count} assets."
             )
+
+    def sync_database_with_storage(self):
+        """
+        Scans DB assets and removes them if the file no longer exists in storage.
+        This fulfills the requirement: 'delete from storage -> delete from app'.
+        """
+        assets = self.db.get_all_assets()
+        removed_count = 0
+        for asset in assets:
+            file_path = asset.get('file_path')
+            if file_path and not os.path.exists(file_path):
+                print(f"Sync: Removing missing asset {asset.get('file_name')} (ID: {asset.get('id')})")
+                self.db.delete_asset(asset.get('id'))
+                removed_count += 1
+        
+        if removed_count > 0:
+            print(f"Sync: Removed {removed_count} missing assets from database.")
+    
+    def import_folder_action(self):
+        """Import entire folder with structure."""
+        folder_path = QFileDialog.getExistingDirectory(self, "Select Folder to Import")
+        if not folder_path:
+            return
+            
+        from PyQt6.QtWidgets import QProgressDialog
+        
+        # We need to know total first? scan_directory does it now.
+        # But for UI responsiveness, we pass a callback.
+        
+        progress = QProgressDialog("Scanning and Importing...", "Cancel", 0, 100, self)
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setMinimumDuration(0) # Show immediately
+        progress.setValue(0)
+        
+        def update_progress(current, total):
+            progress.setMaximum(total)
+            progress.setValue(current)
+            progress.setLabelText(f"Importing {current}/{total}...")
+            QApplication.processEvents() # Keep UI alive
+            if progress.wasCanceled():
+                return
+        
+        # Determine target category (create a container folder for the import)
+        folder_name = os.path.basename(folder_path)
+        if self.current_category:
+            target_category = f"{self.current_category}/{folder_name}"
+        else:
+            target_category = folder_name
+
+        # Run import
+        count = self.file_manager.scan_directory(
+            folder_path, 
+            base_category=target_category,
+            progress_callback=update_progress
+        )
+        
+        progress.setValue(progress.maximum())
+        
+        self.load_assets()
+        self._populate_categories()
+        
+        QMessageBox.information(
+            self, "Import Complete", f"Successfully imported {count} assets from folder."
+        )
 
     def open_storage_folder(self):
         storage_path = os.path.abspath("storage")
@@ -554,3 +844,51 @@ class MainWindow(QMainWindow):
         """Handle project creation"""
         # Project folder created successfully
         pass
+
+    def keyPressEvent(self, event):
+        """Handle global shortcuts like Ctrl+V"""
+        if event.key() == Qt.Key.Key_V and (event.modifiers() & Qt.KeyboardModifier.ControlModifier):
+            self.handle_clipboard_paste()
+        else:
+            super().keyPressEvent(event)
+    
+    def toggle_clipboard_history(self):
+        if self.clipboard_panel.isVisible():
+            self.clipboard_panel.hide()
+        else:
+            self.clipboard_panel.show()
+            self.clipboard_panel.refresh_list()
+            # Force give space to panel: [Grid, Preview, Panel]
+            # Try to take space from Grid/Preview
+            sizes = self.splitter.sizes()
+            if len(sizes) >= 3:
+                # Assuming index 2 is clipboard panel
+                # Give it 300px
+                current_total = sum(sizes)
+                new_size = [max(sizes[0] - 150, 100), max(sizes[1] - 150, 100), 300]
+                self.splitter.setSizes(new_size)
+
+    def handle_clipboard_paste(self):
+        """
+        Intercepts Paste, saves image to history, then shows dialog (optional) or just notifies.
+        For now, let's keep the user workflow simple: Save to History -> Show History Panel.
+        """
+        if not self.clipboard_manager.has_image():
+            return
+        
+        # 1. Save to History
+        file_path = self.clipboard_manager.save_clipboard_image()
+        if file_path:
+            self.status_label.setText(f"📋 Saved to Clipboard History: {os.path.basename(file_path)}")
+            
+            # 2. Show Panel
+            if not self.clipboard_panel.isVisible():
+                self.clipboard_panel.show()
+                sizes = self.splitter.sizes()
+                if len(sizes) >= 3:
+                    new_size = [max(sizes[0] - 150, 100), max(sizes[1] - 150, 100), 300]
+                    self.splitter.setSizes(new_size)
+                
+            self.clipboard_panel.refresh_list()
+        else:
+            QMessageBox.warning(self, "Paste Error", "Failed to save image from clipboard.")

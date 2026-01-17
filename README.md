@@ -76,6 +76,14 @@ QEditToolkit được phát triển để giải quyết bài toán quản lý t
 
 ---
 
+
+### 5. **Audio Waveforms & View Modes** 🆕
+
+- **Audio Visualization:** Tự động tạo sóng âm (waveform) cho file âm thanh.
+- **Flexible Views:** Chuyển đổi linh hoạt giữa chế độ xem Grid, List, và Large Icons.
+
+---
+
 ## 🖥️ Yêu Cầu Hệ Thống
 
 ### Phần Cứng
@@ -90,6 +98,7 @@ QEditToolkit được phát triển để giải quyết bài toán quản lý t
 - **Python**: 3.9 hoặc cao hơn
 - **OS**: Windows 10+, macOS 10.14+, Ubuntu 18.04+
 - **PyQt6**: Tự cài đặt qua dependencies
+- **FFmpeg**: Yêu cầu để tạo thumbnail và waveform
 
 ---
 
@@ -136,13 +145,14 @@ python main.py
 
 1. Nhấp nút **"Import Asset"** ở thanh công cụ trên
 2. Chọn file muốn thêm (hỗ trợ video, hình ảnh, âm thanh, file DaVinci)
-3. Chọn thư mục đích hoặc để trống để lưu vào gốc
-4. Asset sẽ được sao chép vào thư mục `storage/`
+3. Chọn thư mục đích ở sidebar để import trực tiếp vào đó
+4. Asset sẽ được sao chép vào `storage/{category}`
 
-#### **Tìm Kiếm Asset**
+#### **Chế Độ Xem & Tìm Kiếm**
 
-- Gõ tên asset vào ô "Search assets..." để tìm kiếm real-time
-- Kết quả sẽ cập nhật tự động
+- **View Modes:** Chọn Icon, List hoặc Large ở menu trên cùng.
+- **Search:** Gõ tên asset vào ô tìm kiếm.
+- **Sorting:** Tự động sắp xếp theo tên A-Z.
 
 #### **Phân Loại**
 
@@ -207,8 +217,7 @@ python main.py
 **Phương pháp 1: Double-Click**
 
 - Tìm file audio/video muốn import
-- Double-click vào file
-- File tự động thêm vào timeline hiện tại
+- Double-click vào file (Mở preview hệ thống)
 
 **Phương pháp 2: Right-Click Menu**
 
@@ -291,11 +300,12 @@ QEditToolkit/
 ├── requirements.txt         # Dependencies
 ├── .gitignore             # Git ignore rules
 ├── README.md              # Documentation
+├── CHANGELOG.md           # Version History
 │
 ├── src/
 │   ├── core/
 │   │   ├── file_manager.py       # Quản lý import file
-│   │   ├── preview_generator.py  # Tạo preview thumbnail
+│   │   ├── preview_generator.py  # Tạo preview thumbnail (Video/audio support)
 │   │   ├── resolve_installer.py  # DaVinci Resolve templates
 │   │   └── resolve_api.py        # Deep link Resolve API
 │   │
@@ -304,7 +314,7 @@ QEditToolkit/
 │   │
 │   └── ui/
 │       ├── main_window.py        # Main application window
-│       ├── asset_grid.py         # Asset grid view
+│       ├── asset_grid.py         # Asset grid view (View Modes)
 │       ├── preview_panel.py      # Preview panel
 │       ├── project_generator.py  # Dynamic Project Generator
 │       └── resolve_sync_dialog.py # Resolve Sync Dialog
@@ -326,6 +336,7 @@ QEditToolkit/
 - **File Management**: Python os/shutil
 - **Image Processing**: Pillow
 - **Date/Time**: datetime
+- **Media Processing**: FFmpeg
 
 ---
 
@@ -400,4 +411,4 @@ Cảm ơn tất cả những người đã hỗ trợ và đóng góp cho dự �
 ---
 
 **Last Updated**: January 17, 2026  
-**Version**: 2.0.0
+**Version**: 2.1.0

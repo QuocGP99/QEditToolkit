@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QStyle,
 )
-from PyQt6.QtCore import Qt, QMimeData, QUrl, QSize
+from PyQt6.QtCore import Qt, QMimeData, QUrl, QSize, pyqtSignal
 from PyQt6.QtGui import QDrag, QIcon, QPixmap
 import os
 
@@ -22,12 +22,20 @@ except ImportError:
 
 
 class AssetGrid(QListWidget):
+    item_deleted = pyqtSignal() # Optional: create for deletes too
+    favorite_changed = pyqtSignal(int) # Emits asset_id
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setViewMode(QListWidget.ViewMode.IconMode)
         self.setIconSize(QSize(180, 120))
         self.setResizeMode(QListWidget.ResizeMode.Adjust)
         self.setSpacing(10)
+        # Fix: Enforce strict grid size to prevent items from shifting due to long names
+        self.setGridSize(QSize(200, 160)) 
+        self.setWordWrap(True)
+        self.setTextElideMode(Qt.TextElideMode.ElideMiddle)
+        
         self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.setDragEnabled(True)
         self.setAcceptDrops(True)  # Allow internal reordering if needed
@@ -38,6 +46,9 @@ class AssetGrid(QListWidget):
         # Context Menu
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.show_context_menu)
+
+        # Handle Double Click
+        self.itemDoubleClicked.connect(self.on_item_double_clicked)
 
         # Style for the grid
         self.setStyleSheet(
@@ -62,6 +73,27 @@ class AssetGrid(QListWidget):
             }
         """
         )
+
+    def set_view_mode(self, mode):
+        """
+        Switches the view mode of the list widget.
+        mode: 'list' | 'icon' | 'large'
+        """
+        if mode == 'list':
+            self.setViewMode(QListWidget.ViewMode.ListMode)
+            self.setIconSize(QSize(40, 40))
+            self.setGridSize(QSize()) # Reset grid size for list view (dynamic height)
+            self.setSpacing(2)
+        elif mode == 'icon':
+            self.setViewMode(QListWidget.ViewMode.IconMode)
+            self.setIconSize(QSize(180, 120))
+            self.setGridSize(QSize(200, 160))
+            self.setSpacing(10)
+        elif mode == 'large':
+            self.setViewMode(QListWidget.ViewMode.IconMode)
+            self.setIconSize(QSize(280, 180))
+            self.setGridSize(QSize(300, 220))
+            self.setSpacing(15)
 
     def add_asset_item(self, asset_data):
         """
@@ -200,6 +232,9 @@ class AssetGrid(QListWidget):
                     item.setText("⭐ " + text)
             else:
                 item.setText(text.replace("⭐ ", ""))
+            
+            # Notify MainWindow to update count
+            self.favorite_changed.emit(asset_id)
         else:
             print("DB not found")
 
@@ -271,6 +306,7 @@ class AssetGrid(QListWidget):
                     print(f"Error deleting file: {e}")
 
                 self.takeItem(self.row(item))
+            self.item_deleted.emit()
 
     def delete_selected(self):
         items = self.selectedItems()
@@ -302,6 +338,7 @@ class AssetGrid(QListWidget):
                         print(f"Error deleting file: {e}")
 
                     self.takeItem(self.row(item))
+            self.item_deleted.emit()
 
     def _is_media_file(self, file_path):
         """Check if file is a supported media format"""
@@ -337,6 +374,19 @@ class AssetGrid(QListWidget):
         return ext in media_extensions
 
     def on_item_double_clicked(self, item):
-        """Handle double-click"""
-        # Double-click previously sent to timeline, now removed
-        pass
+        """Handle double-click: Open file in default system viewer"""
+        file_path = item.data(Qt.ItemDataRole.UserRole)
+        if file_path and os.path.exists(file_path):
+            try:
+                os.startfile(file_path)
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"Could not open file: {e}")
+
+    def keyPressEvent(self, event):
+        """Handle Space key to open preview"""
+        if event.key() == Qt.Key.Key_Space:
+            items = self.selectedItems()
+            if items:
+                self.on_item_double_clicked(items[0])
+        else:
+            super().keyPressEvent(event)

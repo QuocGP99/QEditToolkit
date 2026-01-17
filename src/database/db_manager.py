@@ -58,6 +58,17 @@ class DBManager:
                 PRIMARY KEY (asset_id, tag_id)
             )
         ''')
+        # Create Clipboard Items Table
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS clipboard_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                file_path TEXT NOT NULL,
+                width INTEGER,
+                height INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                is_deleted BOOLEAN DEFAULT 0
+            )
+        ''')
         # Create AssetCategories Association (or just a column in assets, keeping it simple)
         # For this version, let's add category_id to assets
         try:
@@ -103,8 +114,16 @@ class DBManager:
         return [dict(row) for row in self.cursor.fetchall()]
 
     def toggle_favorite(self, asset_id):
-        self.cursor.execute('UPDATE assets SET is_favorite = NOT is_favorite WHERE id = ?', (asset_id,))
-        self.conn.commit()
+        # proper toggle and return new state
+        self.cursor.execute('SELECT is_favorite FROM assets WHERE id = ?', (asset_id,))
+        row = self.cursor.fetchone()
+        if row:
+            current_val = row['is_favorite'] or 0
+            new_val = 1 if current_val == 0 else 0
+            self.cursor.execute('UPDATE assets SET is_favorite = ? WHERE id = ?', (new_val, asset_id))
+            self.conn.commit()
+            return new_val
+        return 0
 
     def update_asset_preview(self, asset_id, preview_path):
         self.cursor.execute('UPDATE assets SET preview_path = ? WHERE id = ?', (preview_path, asset_id))
@@ -134,3 +153,36 @@ class DBManager:
         self.cursor.execute('SELECT * FROM assets WHERE id = ?', (asset_id,))
         row = self.cursor.fetchone()
         return dict(row) if row else None
+
+    # --- Clipboard History Methods ---
+    def add_clipboard_item(self, file_path, width, height):
+        self.cursor.execute('''
+            INSERT INTO clipboard_items (file_path, width, height)
+            VALUES (?, ?, ?)
+        ''', (file_path, width, height))
+        self.conn.commit()
+        return self.cursor.lastrowid
+
+    def get_clipboard_history(self, limit=50):
+        self.cursor.execute('''
+            SELECT * FROM clipboard_items 
+            WHERE is_deleted = 0 
+            ORDER BY created_at DESC 
+            LIMIT ?
+        ''', (limit,))
+        return [dict(row) for row in self.cursor.fetchall()]
+
+    def delete_clipboard_item(self, item_id):
+        # Soft delete or hard delete? The spec said "Clean Up", usually soft delete is safer initially but file cleanup is needed.
+        # Let's do hard delete from DB + file_path return so manager can delete file.
+        self.cursor.execute('DELETE FROM clipboard_items WHERE id = ?', (item_id,))
+        self.conn.commit()
+
+    def clear_clipboard_history(self):
+        # Get all file paths first to delete them
+        self.cursor.execute('SELECT file_path FROM clipboard_items')
+        files = [row['file_path'] for row in self.cursor.fetchall()]
+        
+        self.cursor.execute('DELETE FROM clipboard_items')
+        self.conn.commit()
+        return files

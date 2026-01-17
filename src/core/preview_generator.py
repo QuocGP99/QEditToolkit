@@ -28,8 +28,20 @@ class PreviewGenerator:
                     .run(capture_stdout=True, capture_stderr=True)
                 )
                 return output_path
+                return output_path
             
-            elif file_type == 'drfx':
+            elif file_type == 'audio':
+                # Generate waveform using showwavespic
+                # Colors: cyan on dark background (or transparent)
+                # s=320x120 to match grid aspect ratio roughly
+                (
+                    ffmpeg
+                    .input(file_path)
+                    .filter('showwavespic', s='320x240', colors='#007acc')
+                    .output(output_path, vframes=1)
+                    .run(capture_stdout=True, capture_stderr=True)
+                )
+                return output_path
                 try:
                     with zipfile.ZipFile(file_path, 'r') as z:
                         file_list = z.namelist()

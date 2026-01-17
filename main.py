@@ -5,6 +5,8 @@ import os
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
 from src.ui.main_window import MainWindow, QApplication
+from src.core.config import ConfigManager
+from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
 
 def main():
@@ -48,7 +50,27 @@ def main():
     """
     )
 
-    window = MainWindow()
+    # Storage Configuration Check
+    config_manager = ConfigManager()
+    storage_path = config_manager.get_storage_path()
+
+    if not storage_path or not os.path.exists(storage_path):
+        # Prompt user
+        msg = QMessageBox()
+        msg.setWindowTitle("Welcome to QEdit Toolkit")
+        msg.setText("Please select a folder to store your assets (Storage Directory).")
+        msg.setIcon(QMessageBox.Icon.Information)
+        msg.exec()
+
+        storage_path = QFileDialog.getExistingDirectory(None, "Select Storage Folder")
+        
+        if not storage_path:
+            # User canceled
+            sys.exit(0)
+            
+        config_manager.set_storage_path(storage_path)
+
+    window = MainWindow(storage_path=storage_path)
     window.show()
     sys.exit(app.exec())
 

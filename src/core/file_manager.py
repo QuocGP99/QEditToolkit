@@ -14,15 +14,21 @@ except ImportError:
     from src.core.preview_generator import PreviewGenerator
 
 class FileManager:
-    def __init__(self, db_manager, storage_dir="storage"):
+    def __init__(self, db_manager, storage_dir):
         self.db_manager = db_manager
         self.storage_dir = storage_dir
         self.preview_generator = PreviewGenerator()
         if not os.path.exists(self.storage_dir):
-            os.makedirs(self.storage_dir)
+            try:
+                os.makedirs(self.storage_dir, exist_ok=True)
+            except OSError as e:
+                print(f"Error creating storage dir: {e}")
 
-    def import_file(self, file_path):
-        """Copies file to storage and adds to DB. Expands .drfx."""
+    def import_file(self, file_path, category_path=None):
+        """
+        Copies file to storage and adds to DB. Expands .drfx.
+        category_path: Relative path (e.g. 'Textures/Wood') where the file should go.
+        """
         file_path = Path(file_path)
         if not file_path.exists():
             return None
@@ -36,7 +42,15 @@ class FileManager:
 
         # Standard file import
         new_filename = f"{file_path.stem}_{uuid.uuid4().hex[:8]}{ext}"
-        dest_path = os.path.join(self.storage_dir, new_filename)
+        
+        # Determine destination folder
+        if category_path:
+            dest_dir = os.path.join(self.storage_dir, category_path)
+            if not os.path.exists(dest_dir):
+                os.makedirs(dest_dir)
+            dest_path = os.path.join(dest_dir, new_filename)
+        else:
+            dest_path = os.path.join(self.storage_dir, new_filename)
 
         try:
             shutil.copy2(file_path, dest_path)
@@ -46,7 +60,13 @@ class FileManager:
             preview_path = self.preview_generator.generate_preview(dest_path, file_type)
 
             # Add to DB
-            asset_id = self.db_manager.add_asset(dest_path, file_path.name, file_type, preview_path=preview_path)
+            asset_id = self.db_manager.add_asset(
+                dest_path, 
+                file_path.name, 
+                file_type, 
+                preview_path=preview_path,
+                category_name=category_path # Pass the category explicitly
+            )
             return asset_id
         except Exception as e:
             print(f"Error importing {file_path}: {e}")
@@ -109,17 +129,52 @@ class FileManager:
             print(f"Error expanding drfx {file_path}: {e}")
             return None
 
-    def scan_directory(self, dir_path):
-        """Recursively scans directory and imports supported files."""
+    def scan_directory(self, dir_path, base_category=None, progress_callback=None):
+        """
+        Recursively scans directory and imports supported files.
+        Preserves folder structure relative to dir_path.
+        """
         supported_exts = {'.drfx', '.setting', '.cube', '.mp4', '.mov', '.png', '.jpg', '.wav', '.mp3'}
-        count = 0
+        
+        # 1. Count total files for progress (optional but good for UX)
+        total_files = 0
         for root, _, files in os.walk(dir_path):
+             total_files += len([f for f in files if Path(f).suffix.lower() in supported_exts])
+        
+        imported_count = 0
+        processed = 0
+        
+        dir_path = os.path.abspath(dir_path)
+        
+        for root, _, files in os.walk(dir_path):
+            # Calculate relative folder structure
+            rel_path = os.path.relpath(root, dir_path)
+            if rel_path == ".":
+                current_sub_cat = None
+            else:
+                # Normalize separators
+                rel_path = rel_path.replace("\\", "/")
+                current_sub_cat = rel_path
+
+            # Combine with base_category if provided
+            final_category = base_category
+            if current_sub_cat:
+                if base_category:
+                    final_category = f"{base_category}/{current_sub_cat}"
+                else:
+                    final_category = current_sub_cat
+            
             for file in files:
                 if Path(file).suffix.lower() in supported_exts:
                     full_path = os.path.join(root, file)
-                    if self.import_file(full_path):
-                        count += 1
-        return count
+                    if self.import_file(full_path, category_path=final_category):
+                        imported_count += 1
+                    
+                    processed += 1
+                    if progress_callback:
+                        progress_callback(processed, total_files)
+                        
+        return imported_count
 
     def _get_file_type(self, ext):
         ext = ext.lower()
